@@ -3,6 +3,7 @@
 
 import warnings, tempfile, shutil, dask, cfgrib
 from datetime import datetime
+from pathlib import Path
 from humanize import naturalsize
 import itertools as it
 import numpy as np
@@ -181,7 +182,7 @@ class NwpCollection:
         for coords in coords_list:
             self._download_and_extract(coords)
 
-    def _download_and_extract(self, coords):
+    def _download_and_extract(self, coords, out_path = None):
         '''Download a single file using the coordinates from the download
         status matrix.
         '''
@@ -190,7 +191,8 @@ class NwpCollection:
         member = self.members[coords[2]]
         nwp_file = NwpPath(date, model=self.model, product=self.product,
                            save_dir=self.save_dir, fxx=fxx, member=member)
-        out_path = nwp_file.get_localFilePath()
+        if out_path is None:
+            out_path = nwp_file.get_localFilePath()
         # create an individual directory for each download
         with tempfile.TemporaryDirectory() as tmp_dir:
             full_file = self._download(tmp_dir, date, fxx=fxx, member=member)
@@ -201,7 +203,7 @@ class NwpCollection:
             shutil.move(str(region_file) + '.idx', str(out_path) + '.idx')
         return out_path
 
-    def _download(self, tmp_dir, *args, **kwargs):
+    def _download(self, tmp_dir, search=None, *args, **kwargs):
         '''Download an NWP grib2 file using Herbie.
         '''
         tmp_archive = NwpDownloader(*args, **kwargs, save_dir=tmp_dir,
@@ -211,7 +213,9 @@ class NwpCollection:
         # directory
         tmp_path = tmp_archive.get_localFilePath()
         tmp_path.parent.mkdir(parents=True, exist_ok=True)
-        full_file = tmp_archive.download(self.search_string)
+        if search is None:
+            search = self.search_string
+        full_file = tmp_archive.download(search)
         return full_file
 
     def _file_exists(self, *args, **kwargs):
@@ -268,30 +272,83 @@ class NwpCollection:
             out = np.full(var_conf['shape'], np.nan)
         return out
 
-    def _members_arr(self, coords, var_conf):
-        return np.stack([ self._array_from_coords(coords + (i, ), var_conf)
-                          for i in range(len(self.members)) ])
+    def _download_and_extract_single(self, coords, out_path = None):
+        '''Download a single variable from a single file using the coordinates
+        from the download status matrix.
+        '''
+        date = self.DATES[coords[0]]
+        fxx = self.fxx[coords[1]]
+        member = self.members[coords[2]]
+        nwp_file = NwpPath(date, model=self.model, product=self.product,
+                           save_dir=self.save_dir, fxx=fxx, member=member)
+        if out_path is None:
+            out_path = nwp_file.get_localFilePath()
+        # create an individual directory for each download
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # TO DO: need to get search string for single variable!!!
+            full_file = self._download(tmp_dir, None, date, fxx=fxx, member=member)
+            # region_file = wgrib2.region(full_file, self.extent)
+            region_file = full_file
+            if not out_path.parent.is_dir():
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(region_file, out_path)
+            # shutil.move(str(region_file) + '.idx', str(out_path) + '.idx')
+        return out_path
 
-    def _fxx_arr_map(self, var_conf, block_id=None, block_info=None):
-        out = np.stack([ self._members_arr((block_id[0], i), var_conf)
+    def _array_from_coords_remote(self, coords, var_conf):
+        '''Get grib array from run/fxx/member coordinates, downloading the file
+        rather than reading it from a local path.
+        '''
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # get the file
+            tmp_grib_path = Path(tmp_dir) / 'tmp.grib2'
+            grib_path = self._download_and_extract_single(coords, out_path=tmp_grib_path)
+            # read the data
+            backend_kwargs = {'filter_by_keys': var_conf['filter_by_keys'],
+                              'indexpath': ''}
+            try:
+                ds = xr.open_dataset(grib_path, engine='cfgrib',
+                                     decode_timedelta=True,
+                                     backend_kwargs=backend_kwargs)
+                out = ds[var_conf['name']].values
+            except Exception as e:
+                # convert the error to a warning, and return an empty array
+                warnings.warn(str(e))
+                out = np.full(var_conf['shape'], np.nan)
+        # check that the array has the correct shape
+        if out.shape != var_conf['shape']:
+            warnings.warn('Array has incorrect shape')
+            out = np.full(var_conf['shape'], np.nan)
+        return out
+
+    def _members_arr(self, coords, var_conf, remote=False):
+        if remote:
+            return np.stack([ self._array_from_coords_remote(coords + (i, ), var_conf)
+                              for i in range(len(self.members)) ])
+        else:
+            return np.stack([ self._array_from_coords(coords + (i, ), var_conf)
+                              for i in range(len(self.members)) ])
+
+    def _fxx_arr_map(self, var_conf, remote=False, block_id=None, block_info=None):
+        out = np.stack([ self._members_arr((block_id[0], i), var_conf, remote)
                          for i in range(len(self.fxx)) ])
         return np.expand_dims(out, 0)
 
     # Rather than create a dask array for each file, create one for each
     # forecast run. This is much more manageable for the dask scheduler.
-    def _delayed_collection_arr(self, var_conf):
+    def _delayed_collection_arr(self, var_conf, remote=False):
         coords = {'time': self.DATES, 'step': self.fxx, 'number': self.members}
         coords.update(var_conf['dims'])
         fxx_shape = (len(self.fxx), len(self.members)) + var_conf['shape']
         # use `map_blocks` instead of `stack`
         n_runs = len(self.DATES)
-        arr = da.map_blocks(self._fxx_arr_map, var_conf,
+        arr = da.map_blocks(self._fxx_arr_map, var_conf, remote,
                             dtype=var_conf['dtype'],
                             chunks=((1, ) * n_runs, *fxx_shape),
                             meta=np.array((), dtype=var_conf['dtype']))
         return xr.DataArray(arr, coords=coords, name=var_conf['name'])
 
-    def open_datasets(self):
+    def open_datasets(self, remote=False):
         '''Analogous to `cfgrib.open_datasets`, but for a collection of files.
         Open the file collection as a list of xarray datasets, one for each
         incompatible set of data dimensions. Each list item is an xarray dataset
@@ -303,14 +360,17 @@ class NwpCollection:
         # - array shape (x/y coordinates)
         # - variable info for filter_by_keys
         # - attributes
-        f0 = NwpPath(self.DATES[0], model=self.model, product=self.product, fxx=self.fxx[0],
-                     member=self.members[0], save_dir=self.save_dir)
-        grib_path = f0.get_localFilePath()
-        # to make sure this reads from the correct location, must use
-        # `dask.delayed`
-        ds_list = dask.delayed(cfgrib.open_datasets)(grib_path,
-                                                     decode_timedelta=True)
-        ds_list = ds_list.compute()
+        if remote:
+            pass
+        else:
+            f0 = NwpPath(self.DATES[0], model=self.model, product=self.product, fxx=self.fxx[0],
+                         member=self.members[0], save_dir=self.save_dir)
+            grib_path = f0.get_localFilePath()
+            # to make sure this reads from the correct location, must use
+            # `dask.delayed`
+            ds_list = dask.delayed(cfgrib.open_datasets)(grib_path,
+                                                         decode_timedelta=True)
+            ds_list = ds_list.compute()
         attr_dict = {}
         outer_list = []
         for ds in ds_list:
@@ -332,9 +392,69 @@ class NwpCollection:
         for conf_list in outer_list:
             arrs = []
             for conf in conf_list:
-                arr = self._delayed_collection_arr(conf)
+                arr = self._delayed_collection_arr(conf, remote)
                 arr.attrs = attr_dict[arr.name]
                 arrs.append(arr)
             ds = xr.merge(arrs, combine_attrs='drop_conflicts')
             out_list.append(ds)
         return out_list
+
+    def open_remote_array(self, search):
+        '''Analogous to `cfgrib.open_datasets`, but for a collection of files.
+        Limited to one variable. Returns an xarray dataset with data from the
+        entire file collection, where the data arrays are dask arrays.
+
+        search : str
+            Use regex to subset the file by specific variables and levels. Must
+            correspond to a single variable. Read more in the Herbie user guide:
+            https://herbie.readthedocs.io/en/latest/user_guide/tutorial/search.html
+        '''
+        # read a single grib2 file to get coordinates and attributes
+        # Getting info about the dataset--
+        # - array shape (x/y coordinates)
+        # - variable info for filter_by_keys
+        # - attributes
+        remote = True
+        # this is similar to `_array_from_coords_remote`
+        coords = (0, 0, 0)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # get the file
+            tmp_grib_path = Path(tmp_dir) / 'tmp.grib2'
+            grib_path = self._download_and_extract_single(coords, out_path=tmp_grib_path)
+            # read the data
+            backend_kwargs = {'indexpath': ''}
+            ds = xr.open_dataset(grib_path, engine='cfgrib',
+                                 decode_timedelta=True,
+                                 backend_kwargs=backend_kwargs)
+        # if remote:
+        #     pass
+        # else:
+        #     f0 = NwpPath(self.DATES[0], model=self.model, product=self.product, fxx=self.fxx[0],
+        #                  member=self.members[0], save_dir=self.save_dir)
+        #     grib_path = f0.get_localFilePath()
+        #     # to make sure this reads from the correct location, must use
+        #     # `dask.delayed`
+        #     ds_list = dask.delayed(cfgrib.open_datasets)(grib_path,
+        #                                                  decode_timedelta=True)
+        #     ds_list = ds_list.compute()
+        attr_dict = {}
+        conf_list = []
+        for v in ds.data_vars:
+            conf = {'name': v}
+            arr = ds[v]
+            conf['filter_by_keys'] = get_filter_by_keys(arr)
+            conf['shape'] = arr.shape
+            conf['dtype'] = arr.dtype
+            dim_names = list(arr.dims)
+            conf['dims'] = { dim: arr[dim] for dim in dim_names }
+            conf_list.append(conf)
+            attr_dict[v] = arr.attrs
+        # as long as we get data separately for each vertical level, we can
+        # easily merge the arrays. But I haven't guaranteed that yet!
+        arrs = []
+        conf = conf_list[0]
+        arr = self._delayed_collection_arr(conf, remote)
+        arr.attrs = attr_dict[arr.name]
+        return arr
+        # ds = xr.merge(arrs, combine_attrs='drop_conflicts')
+        # return out_list
