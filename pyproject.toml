@@ -35,7 +35,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-k8s = ["dask-kubernetes"]
 
 [project.urls]
 Documentation = "https://github.com/ASRCsoft/nwpdownload#readme"
@@ -93,6 +92,5 @@ nwpdownload = { path = ".", editable = true }
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
-k8s = { features = ["k8s"], solve-group = "default" }
 
 [tool.pixi.tasks]

@@ -53,53 +53,6 @@ WSL.
 pip install git+https://github.com/ASRCsoft/nwpdownload
 ```
 
-## Kubernetes cluster
-
-There is no wgrib2 requirement, because it will be installed automatically in
-the worker containers.
-
-```sh
-pip install nwpdownload[k8s]@git+https://github.com/ASRCsoft/nwpdownload
-```
-
-# Clusters
-
-The package contains functions to set up computing clusters with settings
-appropriate for parallel downloads (currently only kubernetes).
-
-## Kubernetes
-
-Requirements:
-
-- `kubectl` on the system running python, configured to connect to kubernetes
-- the dask-kubernetes-operator helm chart must be installed on kubernetes
-  (follow the directions
-  [here](https://kubernetes.dask.org/en/latest/installing.html))
-- permission to create kubernetes pods in the selected namespace
-- a directory that can be mounted by kubernetes, to store the files
-
-```python
-from nwpdownload.kubernetes import k8s_download_cluster
-from dask.distributed import Client
-
-# Create a cluster named nwp-demo and store files at
-# /path/to/nwp/data. Use port forwarding if running python outside of
-# kubernetes.
-cluster = k8s_download_cluster('nwp-demo', '/path/to/nwp/data', n_workers=1,
-                               threads_per_worker=6,
-                               port_forward_cluster_ip=True)
-client = Client(cluster)
-```
-
-When creating the `NwpCollection`, set `save_dir="/mnt/nwpdownload"`. This is
-where the data directory will be mounted within the worker containers.
-
-```python
-gefs_0p25 = NwpCollection(runs, fxx, 'gefs', 'atmos.25', search_0p25,
-                          members=['avg'], save_dir='/mnt/nwpdownload',
-                          extent=nyc_extent)
-```
-
 # Benchmarks
 
 On a kubernetes cluster with a high-speed internet connection, running 600
