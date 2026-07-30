@@ -272,7 +272,7 @@ class NwpCollection:
             out = np.full(var_conf['shape'], np.nan)
         return out
 
-    def _download_and_extract_single(self, coords, out_path = None):
+    def _download_and_extract_single(self, coords, search=None, out_path=None):
         '''Download a single variable from a single file using the coordinates
         from the download status matrix.
         '''
@@ -286,7 +286,7 @@ class NwpCollection:
         # create an individual directory for each download
         with tempfile.TemporaryDirectory() as tmp_dir:
             # TO DO: need to get search string for single variable!!!
-            full_file = self._download(tmp_dir, None, date, fxx=fxx, member=member)
+            full_file = self._download(tmp_dir, search, date, fxx=fxx, member=member)
             # region_file = wgrib2.region(full_file, self.extent)
             region_file = full_file
             if not out_path.parent.is_dir():
@@ -295,14 +295,14 @@ class NwpCollection:
             # shutil.move(str(region_file) + '.idx', str(out_path) + '.idx')
         return out_path
 
-    def _array_from_coords_remote(self, coords, var_conf):
+    def _array_from_coords_remote(self, coords, var_conf, search=None):
         '''Get grib array from run/fxx/member coordinates, downloading the file
         rather than reading it from a local path.
         '''
         with tempfile.TemporaryDirectory() as tmp_dir:
             # get the file
             tmp_grib_path = Path(tmp_dir) / 'tmp.grib2'
-            grib_path = self._download_and_extract_single(coords, out_path=tmp_grib_path)
+            grib_path = self._download_and_extract_single(coords, search, out_path=tmp_grib_path)
             # read the data
             backend_kwargs = {'filter_by_keys': var_conf['filter_by_keys'],
                               'indexpath': ''}
@@ -321,28 +321,28 @@ class NwpCollection:
             out = np.full(var_conf['shape'], np.nan)
         return out
 
-    def _members_arr(self, coords, var_conf, remote=False):
+    def _members_arr(self, coords, var_conf, remote=False, search=None):
         if remote:
-            return np.stack([ self._array_from_coords_remote(coords + (i, ), var_conf)
+            return np.stack([ self._array_from_coords_remote(coords + (i, ), var_conf, search)
                               for i in range(len(self.members)) ])
         else:
             return np.stack([ self._array_from_coords(coords + (i, ), var_conf)
                               for i in range(len(self.members)) ])
 
-    def _fxx_arr_map(self, var_conf, remote=False, block_id=None, block_info=None):
-        out = np.stack([ self._members_arr((block_id[0], i), var_conf, remote)
+    def _fxx_arr_map(self, var_conf, remote=False, search=None, block_id=None, block_info=None):
+        out = np.stack([ self._members_arr((block_id[0], i), var_conf, remote, search)
                          for i in range(len(self.fxx)) ])
         return np.expand_dims(out, 0)
 
     # Rather than create a dask array for each file, create one for each
     # forecast run. This is much more manageable for the dask scheduler.
-    def _delayed_collection_arr(self, var_conf, remote=False):
+    def _delayed_collection_arr(self, var_conf, remote=False, search=None):
         coords = {'time': self.DATES, 'step': self.fxx, 'number': self.members}
         coords.update(var_conf['dims'])
         fxx_shape = (len(self.fxx), len(self.members)) + var_conf['shape']
         # use `map_blocks` instead of `stack`
         n_runs = len(self.DATES)
-        arr = da.map_blocks(self._fxx_arr_map, var_conf, remote,
+        arr = da.map_blocks(self._fxx_arr_map, var_conf, remote, search,
                             dtype=var_conf['dtype'],
                             chunks=((1, ) * n_runs, *fxx_shape),
                             meta=np.array((), dtype=var_conf['dtype']))
@@ -420,7 +420,7 @@ class NwpCollection:
         with tempfile.TemporaryDirectory() as tmp_dir:
             # get the file
             tmp_grib_path = Path(tmp_dir) / 'tmp.grib2'
-            grib_path = self._download_and_extract_single(coords, out_path=tmp_grib_path)
+            grib_path = self._download_and_extract_single(coords, search, out_path=tmp_grib_path)
             # read the data
             backend_kwargs = {'indexpath': ''}
             ds = xr.open_dataset(grib_path, engine='cfgrib',
@@ -453,8 +453,34 @@ class NwpCollection:
         # easily merge the arrays. But I haven't guaranteed that yet!
         arrs = []
         conf = conf_list[0]
-        arr = self._delayed_collection_arr(conf, remote)
+        arr = self._delayed_collection_arr(conf, remote, search)
         arr.attrs = attr_dict[arr.name]
         return arr
         # ds = xr.merge(arrs, combine_attrs='drop_conflicts')
         # return out_list
+
+    # inspired by `cfgrib.open_datasets`
+    def open_remote_datasets(self, searches):
+        '''Analogous to `cfgrib.open_datasets`, but for a collection of remote
+        files. Open the file collection as a list of xarray datasets, one for
+        each incompatible set of data dimensions. Each list item is an xarray
+        dataset with data from the entire file collection, where the data arrays
+        are dask arrays.
+
+        searches : list of str
+            List of regular expressions to subset the file by specific variables
+            and levels. Each expression must correspond to a single parameter.
+            Read more in the Herbie user guide:
+            https://herbie.readthedocs.io/en/latest/user_guide/tutorial/search.html
+        '''
+        arrs = [ self.open_remote_array(s) for s in searches ]
+        type_of_level_arrays = {}
+        for arr in arrs:
+            type_of_level = arr.attrs.get("GRIB_typeOfLevel", "undef")
+            type_of_level_arrays.setdefault(type_of_level, []).append(arr)
+        merged = []
+        for type_of_level in sorted(type_of_level_arrays):
+            ds_list = [ arr.to_dataset() for arr in type_of_level_arrays[type_of_level] ]
+            merged.append(xr.merge(ds_list, join="exact",
+                                   combine_attrs="identical"))
+        return merged
