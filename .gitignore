@@ -177,3 +177,6 @@ pyrightconfig.json
 
 # files downloaded during testing
 tests/data/
+# pixi environments
+.pixi/*
+!.pixi/config.toml

@@ -80,3 +80,19 @@ exclude_lines = [
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
 ]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+[tool.pixi.dependencies]
+wgrib2 = "*"
+
+[tool.pixi.pypi-dependencies]
+nwpdownload = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+k8s = { features = ["k8s"], solve-group = "default" }
+
+[tool.pixi.tasks]
