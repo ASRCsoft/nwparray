@@ -68,11 +68,15 @@ class NwpCollection:
             Longitude and Latitude bounds representing the region of
             interest.
             (lon_min, lon_max, lat_min, lat_max) : float
+        engine : {'cfgrib', 'grib2io'}
+            xarray engine to use for reading the files. Defaults to 'cfgrib'
+            (the ECMWF package). 'grib2io', an NCEP package, uses NCEP's custom
+            grib2 metadata codes.
 
     '''
     
     def __init__(self, DATES, fxx, model, product, search, members=None,
-                 save_dir=None, extent=None):
+                 save_dir=None, extent=None, engine='cfgrib'):
         '''Create an `NwpCollection`.
         '''
         self.DATES = DATES
@@ -83,6 +87,7 @@ class NwpCollection:
         self.members = members
         self.save_dir = save_dir
         self.extent = extent
+        self.engine = engine
 
     def get_status(self):
         '''Print the status of the collection.
@@ -295,6 +300,20 @@ class NwpCollection:
             # shutil.move(str(region_file) + '.idx', str(out_path) + '.idx')
         return out_path
 
+    def _read_single_variable(self, f, engine):
+        if engine == 'cfgrib':
+            # backend_kwargs = {'filter_by_keys': var_conf['filter_by_keys'],
+            #                   'indexpath': ''}
+            ds = xr.open_dataset(f, engine='cfgrib',
+                                 decode_timedelta=True)
+                                 #backend_kwargs=backend_kwargs)
+        elif engine == 'grib2io':
+            # backend_kwargs = {'save_index': False, 'filters': {'shortName': 'HGT'}}
+            ds = xr.open_dataset(f, engine='grib2io')
+                                 #backend_kwargs=backend_kwargs)
+            ds.load()
+        return ds
+
     def _array_from_coords_remote(self, coords, var_conf, search=None):
         '''Get grib array from run/fxx/member coordinates, downloading the file
         rather than reading it from a local path.
@@ -303,13 +322,8 @@ class NwpCollection:
             # get the file
             tmp_grib_path = Path(tmp_dir) / 'tmp.grib2'
             grib_path = self._download_and_extract_single(coords, search, out_path=tmp_grib_path)
-            # read the data
-            backend_kwargs = {'filter_by_keys': var_conf['filter_by_keys'],
-                              'indexpath': ''}
             try:
-                ds = xr.open_dataset(grib_path, engine='cfgrib',
-                                     decode_timedelta=True,
-                                     backend_kwargs=backend_kwargs)
+                ds = self._read_single_variable(grib_path, engine=self.engine)
                 out = ds[var_conf['name']].values
             except Exception as e:
                 # convert the error to a warning, and return an empty array
@@ -421,28 +435,12 @@ class NwpCollection:
             # get the file
             tmp_grib_path = Path(tmp_dir) / 'tmp.grib2'
             grib_path = self._download_and_extract_single(coords, search, out_path=tmp_grib_path)
-            # read the data
-            backend_kwargs = {'indexpath': ''}
-            ds = xr.open_dataset(grib_path, engine='cfgrib',
-                                 decode_timedelta=True,
-                                 backend_kwargs=backend_kwargs)
-        # if remote:
-        #     pass
-        # else:
-        #     f0 = NwpPath(self.DATES[0], model=self.model, product=self.product, fxx=self.fxx[0],
-        #                  member=self.members[0], save_dir=self.save_dir)
-        #     grib_path = f0.get_localFilePath()
-        #     # to make sure this reads from the correct location, must use
-        #     # `dask.delayed`
-        #     ds_list = dask.delayed(cfgrib.open_datasets)(grib_path,
-        #                                                  decode_timedelta=True)
-        #     ds_list = ds_list.compute()
+            ds = self._read_single_variable(grib_path, engine=self.engine)
         attr_dict = {}
         conf_list = []
         for v in ds.data_vars:
             conf = {'name': v}
             arr = ds[v]
-            conf['filter_by_keys'] = get_filter_by_keys(arr)
             conf['shape'] = arr.shape
             conf['dtype'] = arr.dtype
             dim_names = list(arr.dims)

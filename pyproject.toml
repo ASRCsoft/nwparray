@@ -46,6 +46,7 @@ path = "src/nwpdownload/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
+  "bokeh >= 3.1.0",
   "ipython"
 ]
 
@@ -86,8 +87,10 @@ platforms = ["linux-64", "osx-64", "osx-arm64"]
 
 [tool.pixi.dependencies]
 wgrib2 = "*"
+grib2io = "*"
 
 [tool.pixi.pypi-dependencies]
+ipython = "*"
 nwpdownload = { path = ".", editable = true }
 
 [tool.pixi.environments]
