@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "nwpdownload"
+name = "nwparray"
 dynamic = ["version"]
 description = 'Tool for downloading weather forecast datasets '
 readme = "README.md"
@@ -37,12 +37,12 @@ dependencies = [
 [project.optional-dependencies]
 
 [project.urls]
-Documentation = "https://github.com/ASRCsoft/nwpdownload#readme"
-Issues = "https://github.com/ASRCsoft/nwpdownload/issues"
-Source = "https://github.com/ASRCsoft/nwpdownload"
+Documentation = "https://github.com/ASRCsoft/nwparray#readme"
+Issues = "https://github.com/ASRCsoft/nwparray/issues"
+Source = "https://github.com/ASRCsoft/nwparray"
 
 [tool.hatch.version]
-path = "src/nwpdownload/__about__.py"
+path = "src/nwparray/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
@@ -60,19 +60,19 @@ extra-dependencies = [
   "mypy>=1.0.0",
 ]
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/nwpdownload tests}"
+check = "mypy --install-types --non-interactive {args:src/nwparray tests}"
 
 [tool.coverage.run]
-source_pkgs = ["nwpdownload", "tests"]
+source_pkgs = ["nwparray", "tests"]
 branch = true
 parallel = true
 omit = [
-  "src/nwpdownload/__about__.py",
+  "src/nwparray/__about__.py",
 ]
 
 [tool.coverage.paths]
-nwpdownload = ["src/nwpdownload", "*/nwpdownload/src/nwpdownload"]
-tests = ["tests", "*/nwpdownload/tests"]
+nwparray = ["src/nwparray", "*/nwparray/src/nwparray"]
+tests = ["tests", "*/nwparray/tests"]
 
 [tool.coverage.report]
 exclude_lines = [
@@ -91,7 +91,7 @@ grib2io = "*"
 
 [tool.pixi.pypi-dependencies]
 ipython = "*"
-nwpdownload = { path = ".", editable = true }
+nwparray = { path = ".", editable = true }
 
 [tool.pixi.environments]
 default = { solve-group = "default" }

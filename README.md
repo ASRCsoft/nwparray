@@ -1,4 +1,4 @@
-nwpdownload is an extension of the [Herbie](https://herbie.readthedocs.io/)
+nwparray is an extension of the [Herbie](https://herbie.readthedocs.io/)
 python package, focused on downloading large datasets for forecast calibration
 and long-term forecast evaluation.
 
@@ -9,7 +9,7 @@ changes.
 
 ```python
 import pandas as pd
-from nwpdownload import NwpCollection
+from nwparray import NwpCollection
 from dask.distributed import Client
 
 # set up the dask workers
@@ -50,7 +50,7 @@ conda-forge, spack, and RPM. There is no Windows package, but it may work in
 WSL.
 
 ```sh
-pip install git+https://github.com/ASRCsoft/nwpdownload
+pip install git+https://github.com/ASRCsoft/nwparray
 ```
 
 # Benchmarks
