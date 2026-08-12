@@ -283,7 +283,10 @@ class NwpCollection:
         '''
         date = self.DATES[coords[0]]
         fxx = self.fxx[coords[1]]
-        member = self.members[coords[2]]
+        if self.members is None:
+            member = None
+        else:
+            member = self.members[coords[2]]
         nwp_file = NwpPath(date, model=self.model, product=self.product,
                            save_dir=self.save_dir, fxx=fxx, member=member)
         if out_path is None:
@@ -344,16 +347,30 @@ class NwpCollection:
                               for i in range(len(self.members)) ])
 
     def _fxx_arr_map(self, var_conf, remote=False, search=None, block_id=None, block_info=None):
-        out = np.stack([ self._members_arr((block_id[0], i), var_conf, remote, search)
-                         for i in range(len(self.fxx)) ])
+        if self.members is None:
+            if remote:
+                out = np.stack([ self._array_from_coords_remote((block_id[0], i), var_conf, search)
+                                  for i in range(len(self.fxx)) ])
+            else:
+                out = np.stack([ self._array_from_coords((block_id[0], i), var_conf)
+                                  for i in range(len(self.fxx)) ])
+        else:
+            out = np.stack([ self._members_arr((block_id[0], i), var_conf, remote, search)
+                             for i in range(len(self.fxx)) ])
         return np.expand_dims(out, 0)
 
     # Rather than create a dask array for each file, create one for each
     # forecast run. This is much more manageable for the dask scheduler.
     def _delayed_collection_arr(self, var_conf, remote=False, search=None):
-        coords = {'time': self.DATES, 'step': self.fxx, 'number': self.members}
+        if self.members is None:
+            coords = {'time': self.DATES, 'step': self.fxx}
+        else:
+            coords = {'time': self.DATES, 'step': self.fxx, 'number': self.members}
         coords.update(var_conf['dims'])
-        fxx_shape = (len(self.fxx), len(self.members)) + var_conf['shape']
+        if self.members is None:
+            fxx_shape = (len(self.fxx), ) + var_conf['shape']
+        else:
+            fxx_shape = (len(self.fxx), len(self.members)) + var_conf['shape']
         # use `map_blocks` instead of `stack`
         n_runs = len(self.DATES)
         arr = da.map_blocks(self._fxx_arr_map, var_conf, remote, search,
