@@ -1,6 +1,10 @@
-nwparray is an extension of the [Herbie](https://herbie.readthedocs.io/)
-python package, focused on downloading large datasets for forecast calibration
-and long-term forecast evaluation.
+nwparray opens NWP weather forecast archives (such as those from NCEP or ECMWF)
+as xarray datasets, so that the data can be organized for model training or
+forecast evaluation. It's designed to be highly scalable via Dask, to quickly
+download and process terabytes of archive data.
+
+The package relies on templates from [Herbie](https://herbie.readthedocs.io/),
+and uses many of the same function arguments.
 
 This package is in an early stage of development, so expect bugs and breaking
 changes.
@@ -18,22 +22,17 @@ client = Client(processes=False, threads_per_worker=4,
 client.dashboard_link # view info about the tasks and workers
 
 # describe the GEFS data to get
-search_0p25 = '|'.join([
+searches = [
     ':TMP:2 m above ground:',
     ':DPT:2 m above ground:',
     ':PRES:surface:'
-])
-# define the spatial extent for subsetting
-nyc_extent = (285.5, 286.5, 40, 41.5)
+]
 runs = pd.date_range(start='2021-04-01 12:00', periods=4, freq='D')
 fxx = range(3, 24 * 8, 3) # 63 forecast hours going out 8 days
 
-gefs_0p25 = NwpCollection(runs, fxx, 'gefs', 'atmos.25', search_0p25,
-                          members=['avg'], save_dir='/path/to/nwp/data',
-                          extent=nyc_extent)
+gefs_0p25 = NwpCollection(runs, fxx, 'gefs', 'atmos.25', searches,
+                          members=['avg'])
 gefs_0p25.collection_size() # estimate the complete download size
-gefs_0p25.get_status() # summary of existing files
-gefs_0p25.download() # download files in parallel with dask
 
 # The data can be opened in xarray, much like with cfgrib
 dataset_list = gefs_0p25.open_datasets()
@@ -42,12 +41,6 @@ dataset_list = gefs_0p25.open_datasets()
 # Installation
 
 Installation requires git to be installed.
-
-## Running locally
-
-[wgrib2](https://github.com/NOAA-EMC/wgrib2) is required. It is available from
-conda-forge, spack, and RPM. There is no Windows package, but it may work in
-WSL.
 
 ```sh
 pip install git+https://github.com/ASRCsoft/nwparray
