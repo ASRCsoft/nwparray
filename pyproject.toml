@@ -91,6 +91,8 @@ grib2io = "*"
 [tool.pixi.pypi-dependencies]
 ipython = "*"
 nwparray = { path = ".", editable = true }
+pytest = "*"
+zensical = "*"
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
