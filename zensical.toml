@@ -11,8 +11,9 @@ repo_name = "ASRCsoft/nwparray"
 edit_uri = "edit/main/docs/"
 
 nav = [
-  { "Get started" = "index.md" },
-  { "Markdown in 5min" = "markdown.md" },
+  { "Introduction" = "index.md" },
+  { "Installation" = "installation.md" },
+  { "Common tasks" = "tasks.md" }
 ]
 
 # extra_css = ["stylesheets/extra.css"]
