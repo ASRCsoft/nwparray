@@ -46,7 +46,7 @@ class NwpCollection:
 
     '''
     
-    def __init__(self, DATES, fxx, model, product, searches, members=None,
+    def __init__(self, DATES, fxx, model, searches, product=None, members=None,
                  engine='cfgrib'):
         '''Create an `NwpCollection`.
         '''
@@ -78,9 +78,15 @@ class NwpCollection:
         # this temp directory prevents Herbie from reading from local index
         # files, which may not match the source file
         with tempfile.TemporaryDirectory() as tmp_dir:
-            h = Herbie(self.DATES[0], model=self.model, product=self.product,
-                       fxx=self.fxx[0], member=self.members[0],
-                       save_dir=tmp_dir, verbose=False)
+            if self.members is None:
+                h = Herbie(self.DATES[0], model=self.model,
+                           product=self.product, fxx=self.fxx[0],
+                           save_dir=tmp_dir, verbose=False)
+            else:
+                h = Herbie(self.DATES[0], model=self.model,
+                           product=self.product, fxx=self.fxx[0],
+                           member=self.members[0], save_dir=tmp_dir,
+                           verbose=False)
         search_string = '|'.join(self.searches)
         inv = h.inventory(search=search_string)
         return (inv['end_byte'] - inv['start_byte'] + 1).sum()
@@ -88,7 +94,10 @@ class NwpCollection:
     def collection_size(self, humanize=True):
         '''Calculate the size of the collection.
         '''
-        n_files = len(self.DATES) * len(self.fxx) * len(self.members)
+        if self.members is None:
+            n_files = len(self.DATES) * len(self.fxx)
+        else:
+            n_files = len(self.DATES) * len(self.fxx) * len(self.members)
         full_download_size = self.file_size * n_files
         if humanize:
             return naturalsize(full_download_size)

@@ -1,6 +1,7 @@
 '''Get path info from Herbie.
 '''
 
+import logging
 from datetime import timedelta
 from typing import Optional, Union
 import pandas as pd
@@ -9,6 +10,8 @@ from herbie.help import _search_help
 from herbie.core import Datetime
 import herbie.models as model_templates
 from herbie import Herbie
+
+log = logging.getLogger(__name__)
 
 class NwpPath(Herbie):
     '''Get file paths based on Herbie model templates. Takes the same arguments
