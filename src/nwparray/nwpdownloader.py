@@ -35,8 +35,9 @@ class NwpDownloader(NwpPath):
                 return self.session
         # make a new session
         session = requests.Session()
+        # 503 is amazon slow down error, 500 is internal server error
         retry_strategy = Retry(total=5, backoff_factor=1,
-                               status_forcelist=[503])
+                               status_forcelist=[503, 500])
         adapter = HTTPAdapter(max_retries=retry_strategy)
         session.mount('http://', adapter)
         session.mount('https://', adapter)

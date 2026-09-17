@@ -136,9 +136,8 @@ class NwpCollection:
         rather than reading it from a local path.
         '''
         with tempfile.TemporaryDirectory() as tmp_dir:
-            # get the file
-            grib_path = self._download_and_extract_single(coords, search, out_dir=tmp_dir)
             try:
+                grib_path = self._download_and_extract_single(coords, search, out_dir=tmp_dir)
                 ds = self._read_single_variable(grib_path, engine=self.engine)
                 out = ds[var_conf['name']].values
             except Exception as e:
