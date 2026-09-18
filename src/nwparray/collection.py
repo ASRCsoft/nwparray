@@ -170,7 +170,13 @@ class NwpCollection:
             coords = {'time': self.DATES, 'step': self.fxx}
         else:
             coords = {'time': self.DATES, 'step': self.fxx, 'number': self.members}
-        coords.update(var_conf['dims'])
+        if self.engine == 'cfgrib':
+            ignored_dims = set(["time", "step", "number", "valid_time"])
+        elif self.engine == 'grib2io':
+            ignored_dims = set(["refDate", "leadTime", "perturbationNumber", "validDate"])
+        extra_dims = { v: var_conf['dims'][v] for v in var_conf['dims'].keys()
+                       if not v in ignored_dims }
+        coords.update(extra_dims)
         if self.members is None:
             fxx_shape = (len(self.fxx), ) + var_conf['shape']
         else:
@@ -181,7 +187,15 @@ class NwpCollection:
                             dtype=var_conf['dtype'],
                             chunks=((1, ) * n_runs, *fxx_shape),
                             meta=np.array((), dtype=var_conf['dtype']))
-        return xr.DataArray(arr, coords=coords, name=var_conf['name'])
+        out_da = xr.DataArray(arr, coords=coords, name=var_conf['name'])
+        # Add back the other original coordinates, but not if they depend on
+        # ["time", "step", "number"] because these all changed relative to the
+        # reference data file. Also have to drop ("reset") coordinates on the
+        # coordinates themselves, because otherwise they will be propogated up
+        # to the array coordinates.
+        extra_coords = { v: var_conf['coords'][v].reset_coords(drop=True) for v in var_conf['coords'].keys()
+                         if (not v in ignored_dims) and ignored_dims.isdisjoint(var_conf['coords'][v].dims) }
+        return out_da.assign_coords(extra_coords)
 
     def open_array(self, search):
         '''Returns an xarray DataArray with data from the entire file
@@ -212,6 +226,7 @@ class NwpCollection:
             conf['dtype'] = arr.dtype
             dim_names = list(arr.dims)
             conf['dims'] = { dim: arr[dim] for dim in dim_names }
+            conf['coords'] = { coord: arr[coord] for coord in arr.coords }
             conf_list.append(conf)
             attr_dict[v] = arr.attrs
         # as long as we get data separately for each vertical level, we can

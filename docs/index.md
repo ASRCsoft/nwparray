@@ -27,8 +27,7 @@ from nwparray import NwpCollection
 # describe the HRRR data to get
 searches = [
     ':TMP:2 m above ground:',
-    ':DPT:2 m above ground:',
-    ':PRES:surface:'
+    ':DPT:2 m above ground:'
 ]
 runs = pd.date_range(start='2021-04-01 12:00', periods=4, freq='D')
 fxx = range(13) # forecast hours 0-12
@@ -42,16 +41,19 @@ print(dataset_list[0])
 ```
 
 ```
-<xarray.Dataset> Size: 793MB
-Dimensions:  (time: 4, step: 13, y: 1059, x: 1799)
-Coordinates:
-  * time     (time) datetime64[us] 32B 2021-04-01T12:00:00 ... 2021-04-04T12:...
-  * step     (step) int64 104B 0 1 2 3 4 5 6 7 8 9 10 11 12
-  * y        (y) int64 8kB 0 1 2 3 4 5 6 ... 1052 1053 1054 1055 1056 1057 1058
-  * x        (x) int64 14kB 0 1 2 3 4 5 6 ... 1792 1793 1794 1795 1796 1797 1798
-Data variables:
-    t2m      (time, step, y, x) float32 396MB dask.array<chunksize=(1, 13, 1059, 1799), meta=np.ndarray>
-    d2m      (time, step, y, x) float32 396MB dask.array<chunksize=(1, 13, 1059, 1799), meta=np.ndarray>
+<xarray.Dataset> Size: 823MB
+ Dimensions:            (time: 4, step: 13, y: 1059, x: 1799)
+ Coordinates:
+   * time               (time) datetime64[us] 32B 2021-04-01T12:00:00 ... 2021...
+   * step               (step) int64 104B 0 1 2 3 4 5 6 7 8 9 10 11 12
+   * y                  (y) int64 8kB 0 1 2 3 4 5 ... 1054 1055 1056 1057 1058
+   * x                  (x) int64 14kB 0 1 2 3 4 5 ... 1794 1795 1796 1797 1798
+     latitude           (y, x) float64 15MB 21.14 21.15 21.15 ... 47.85 47.84
+     longitude          (y, x) float64 15MB 237.3 237.3 237.3 ... 299.0 299.1
+     heightAboveGround  float64 8B 2.0
+ Data variables:
+     t2m                (time, step, y, x) float32 396MB dask.array<chunksize=(1, 13, 1059, 1799), meta=np.ndarray>
+     d2m                (time, step, y, x) float32 396MB dask.array<chunksize=(1, 13, 1059, 1799), meta=np.ndarray>
 ```
 
 ## nwparray vs. Herbie
