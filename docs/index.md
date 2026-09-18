@@ -4,7 +4,7 @@ icon: lucide/sun
 
 # Overview
 
-nwparray opens NWP weather forecast archives (such as those from NCEP or ECMWF)
+nwparray opens NWP weather forecast archives (such as those from NOAA or ECMWF)
 as xarray datasets, so that the data can be organized for model training or
 forecast evaluation. It's designed to be highly scalable via
 [Dask](https://www.dask.org/), to quickly download and process terabytes of
@@ -53,3 +53,18 @@ Data variables:
     t2m      (time, step, y, x) float32 396MB dask.array<chunksize=(1, 13, 1059, 1799), meta=np.ndarray>
     d2m      (time, step, y, x) float32 396MB dask.array<chunksize=(1, 13, 1059, 1799), meta=np.ndarray>
 ```
+
+## nwparray vs. Herbie
+
+nwparray is modeled on Herbie and even includes modified Herbie source code.
+There are two major differences that allow nwparray to handle larger datasets:
+
+1. Herbie writes the original data files to the local system, and nwparray does
+   not. For large datasets, reading the files becomes slow and impractical. To
+   store datasets locally with nwparray, the data can be written directly from
+   the xarray dataset to netcdf or zarr format, which is more practical for
+   large datasets.
+1. While both Herbie and nwparray use Dask for parallel processing once the data
+   is in xarray, nwparray adjusts the chunk size used by Dask, which allows Dask
+   to process much larger datasets.
+

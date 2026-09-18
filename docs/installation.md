@@ -8,6 +8,8 @@ Installation requires git to be installed.
 pip install git+https://github.com/ASRCsoft/nwparray
 ```
 
+## NCEP metadata codes
+
 nwparray can use the NCEP tool
 [grib2io](https://noaa-mdl.github.io/grib2io/grib2io.html) to read NCEP's custom
 metadata codes, which are used for NCEP products like GFS, HRRR, etc. To use it,
