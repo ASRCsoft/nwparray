@@ -98,3 +98,4 @@ zensical = "*"
 default = { solve-group = "default" }
 
 [tool.pixi.tasks]
+test = "pytest"
