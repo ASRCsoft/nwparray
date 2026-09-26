@@ -2,7 +2,7 @@
 import pandas as pd
 import dask
 from dask.distributed import Client, LocalCluster
-from nwpdownload.nwpdownloader import NwpDownloader
+from nwparray.nwpdownloader import NwpDownloader
 
 search_0p25 = '|'.join([
     ':TMP:2 m above ground:',
