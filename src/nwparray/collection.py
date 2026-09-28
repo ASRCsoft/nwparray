@@ -5,10 +5,10 @@ import warnings, tempfile
 from humanize import naturalsize
 import numpy as np
 import xarray as xr
-import dask.array as da
 from herbie import Herbie
 from .nwppath import NwpPath
 from .nwpdownloader import NwpDownloader
+from .rechunked_array import map_rechunked_blocks
 
 class NwpCollection:
     '''A (potentially large) collection of NWP data files.
@@ -150,19 +150,6 @@ class NwpCollection:
             out = np.full(var_conf['shape'], np.nan)
         return out
 
-    def _members_arr(self, coords, var_conf, search):
-        return np.stack([ self._array_from_coords_remote(coords + (i, ), var_conf, search)
-                          for i in range(len(self.members)) ])
-
-    def _fxx_arr_map(self, var_conf, search, block_id=None, block_info=None):
-        if self.members is None:
-            out = np.stack([ self._array_from_coords_remote((block_id[0], i), var_conf, search)
-                             for i in range(len(self.fxx)) ])
-        else:
-            out = np.stack([ self._members_arr((block_id[0], i), var_conf, search)
-                             for i in range(len(self.fxx)) ])
-        return np.expand_dims(out, 0)
-
     # Rather than create a dask array for each file, create one for each
     # forecast run. This is much more manageable for the dask scheduler.
     def _delayed_collection_arr(self, var_conf, search):
@@ -170,6 +157,7 @@ class NwpCollection:
             coords = {'time': self.DATES, 'step': self.fxx}
         else:
             coords = {'time': self.DATES, 'step': self.fxx, 'number': self.members}
+        arr_coords = [ range(len(coord)) for coord in coords.values() ]
         if self.engine == 'cfgrib':
             ignored_dims = set(["time", "step", "number", "valid_time"])
         elif self.engine == 'grib2io':
@@ -177,16 +165,16 @@ class NwpCollection:
         extra_dims = { v: var_conf['dims'][v] for v in var_conf['dims'].keys()
                        if not v in ignored_dims }
         coords.update(extra_dims)
+        # one chunk per forecast run, until I come up with more sophisticated
+        # chunking rules
         if self.members is None:
-            fxx_shape = (len(self.fxx), ) + var_conf['shape']
+            chunk_size = (1, len(self.fxx))
         else:
-            fxx_shape = (len(self.fxx), len(self.members)) + var_conf['shape']
-        # use `map_blocks` instead of `stack`
-        n_runs = len(self.DATES)
-        arr = da.map_blocks(self._fxx_arr_map, var_conf, search,
-                            dtype=var_conf['dtype'],
-                            chunks=((1, ) * n_runs, *fxx_shape),
-                            meta=np.array((), dtype=var_conf['dtype']))
+            chunk_size = (1, len(self.fxx), len(self.members))
+        def f(*coords):
+            return self._array_from_coords_remote(coords, var_conf, search)
+        arr = map_rechunked_blocks(f, var_conf['shape'], arr_coords, chunk_size,
+                                   var_conf['dtype'])
         out_da = xr.DataArray(arr, coords=coords, name=var_conf['name'])
         # Add back the other original coordinates, but not if they depend on
         # ["time", "step", "number"] because these all changed relative to the
