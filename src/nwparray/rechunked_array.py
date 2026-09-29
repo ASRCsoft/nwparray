@@ -4,6 +4,15 @@
 import numpy as np
 import dask.array as da
 from itertools import product
+from dask.array.core import normalize_chunks
+
+def get_chunks(shape, n_chunks):
+    '''Return approximately `n_chunks` chunks for an array with shape `shape`.
+    '''
+    n_elements = np.prod(shape)
+    limit = max(1, n_elements / n_chunks)
+    return normalize_chunks("auto", shape=shape, limit=limit,
+                            dtype=np.dtype("uint8"))
 
 # def recursively_stack(f, coords):
 #     '''Run function `f` on each combination of coordinates, stacking the results
@@ -26,7 +35,6 @@ from itertools import product
 #         raise Exception("Coordinates are empty")
 #     # stack the arrays
 
-
 def stack_product(f, *coords):
     '''Run function `f` on each combination of coordinates, stacking the results
     into a single array with coordinates `coords` + coordinates of the array
@@ -39,13 +47,10 @@ def stack_product(f, *coords):
     out_shape = inputs_shape + results.shape[1:]
     return results.reshape(out_shape)
 
-
-def map_rechunked_blocks(f, f_shape, coords, chunk_size, f_dtype):
+def map_rechunked_blocks(f, f_shape, f_dtype, coords, n_chunks=1000):
     '''Create a chunked array, similar to `map_blocks`, but with each chunk
     aggregating multiple `f` results
     '''
-    inputs_shape = tuple(len(x) for x in coords)
-
     # compute and organize a chunk of `f` results
     def f_chunk(block_info=None):
         # Need the actual coordinate values represented by this block. It
@@ -59,15 +64,7 @@ def map_rechunked_blocks(f, f_shape, coords, chunk_size, f_dtype):
             chunk_coords.append(coords_i[chunk_ind_i[0]:chunk_ind_i[1]])
         return stack_product(f, *chunk_coords)
 
-    # get a tuple of chunk lengths in each dimension
-    out_chunks = []
-    for i in range(len(chunk_size)):
-        n_chunks = int(np.ceil(inputs_shape[i] / chunk_size[i]))
-        chunk_list = [chunk_size[i], ] * n_chunks
-        chunk_rem = inputs_shape[i] % chunk_size[i]
-        if chunk_rem:
-            chunk_list[-1] = chunk_rem
-        out_chunks.append(tuple(chunk_list))
-
+    inputs_shape = tuple(len(x) for x in coords)
+    out_chunks = get_chunks(inputs_shape, n_chunks)
     return da.map_blocks(f_chunk, dtype=f_dtype, chunks=tuple(out_chunks) + f_shape,
                          meta=np.array((), dtype=f_dtype))

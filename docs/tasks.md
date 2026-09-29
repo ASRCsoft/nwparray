@@ -40,12 +40,18 @@ bandwidth and enough CPU cores to read the data files as they are downloaded.
 
 ## Rechunking
 
-Currently, nwparray's default chunking is not ideal for most uses. For example,
-to get a time series of values at a single location, every chunk must be opened,
-reading the entire data array.
+Dask divides data arrays into "chunks" to split computational work into smaller,
+more manageable pieces.
 
-The [rechunker](https://rechunker.readthedocs.io/) package can efficiently
-convert the chunk sizes.
+For the init time, lead time, and ensemble member dimensions, nwparray uses
+square- or cube-like chunk shapes that should be fine for most uses. Spatial
+dimensions are not chunked because it would require splitting a single file
+between multiple chunks.
+
+In some cases it makes sense to change the chunk shapes, for example when
+reading spatial subsets of the data. The
+[rechunker](https://rechunker.readthedocs.io/) package can efficiently convert
+the chunk sizes, even for large datasets.
 
 ## Saving datasets
 

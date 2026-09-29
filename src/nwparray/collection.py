@@ -152,7 +152,7 @@ class NwpCollection:
 
     # Rather than create a dask array for each file, create one for each
     # forecast run. This is much more manageable for the dask scheduler.
-    def _delayed_collection_arr(self, var_conf, search):
+    def _delayed_collection_arr(self, var_conf, search, chunks):
         if self.members is None:
             coords = {'time': self.DATES, 'step': self.fxx}
         else:
@@ -173,8 +173,8 @@ class NwpCollection:
             chunk_size = (1, len(self.fxx), len(self.members))
         def f(*coords):
             return self._array_from_coords_remote(coords, var_conf, search)
-        arr = map_rechunked_blocks(f, var_conf['shape'], arr_coords, chunk_size,
-                                   var_conf['dtype'])
+        arr = map_rechunked_blocks(f, var_conf['shape'],  var_conf['dtype'],
+                                   arr_coords, chunks)
         out_da = xr.DataArray(arr, coords=coords, name=var_conf['name'])
         # Add back the other original coordinates, but not if they depend on
         # ["time", "step", "number"] because these all changed relative to the
@@ -185,7 +185,7 @@ class NwpCollection:
                          if (not v in ignored_dims) and ignored_dims.isdisjoint(var_conf['coords'][v].dims) }
         return out_da.assign_coords(extra_coords)
 
-    def open_array(self, search):
+    def open_array(self, search, chunks=1000):
         '''Returns an xarray DataArray with data from the entire file
         collection, where the array is a dask array.
 
@@ -221,12 +221,12 @@ class NwpCollection:
         # easily merge the arrays. But I haven't guaranteed that yet!
         arrs = []
         conf = conf_list[0]
-        arr = self._delayed_collection_arr(conf, search)
+        arr = self._delayed_collection_arr(conf, search, chunks)
         arr.attrs = attr_dict[arr.name]
         return arr
 
     # inspired by `cfgrib.open_datasets`
-    def open_datasets(self, searches=None):
+    def open_datasets(self, searches=None, chunks=1000):
         '''Analogous to `cfgrib.open_datasets`, but for a collection of remote
         files. Open the file collection as a list of xarray datasets, one for
         each incompatible set of data dimensions. Each list item is an xarray
@@ -241,7 +241,8 @@ class NwpCollection:
         '''
         if searches is None:
             searches = self.searches
-        arrs = [ self.open_array(s) for s in searches ]
+        arr_chunks = max(1, chunks // len(searches))
+        arrs = [ self.open_array(s, arr_chunks) for s in searches ]
         type_of_level_arrays = {}
         for arr in arrs:
             type_of_level = arr.attrs.get("GRIB_typeOfLevel", "undef")
