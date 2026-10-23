@@ -15,8 +15,8 @@ and uses many of the same function arguments.
 
 !!! warning
 
-    This package is in an early stage of development, so expect bugs and
-	breaking changes.
+    This package is in an early stage of development, so expect breaking
+	changes.
 
 ## Example
 
